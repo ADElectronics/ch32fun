@@ -7,10 +7,12 @@ on:
       - fix/windows-com-no-dtr
     paths:
       - 'minichlink/**'
+      - 'ch32fun/ch32fun.h'
       - '.github/workflows/minichlink-windows.yml'
   pull_request:
     paths:
       - 'minichlink/**'
+      - 'ch32fun/ch32fun.h'
       - '.github/workflows/minichlink-windows.yml'
   workflow_dispatch:
 

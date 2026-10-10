@@ -47,8 +47,8 @@ int serial_dev_open(serial_dev_t *dev) {
 	dcbSerialParams.ByteSize = 8;
 	dcbSerialParams.StopBits = ONESTOPBIT;
 	dcbSerialParams.Parity = NOPARITY;
-	// Never assert DTR or use hardware DTR/RTS flow control on Windows.
-	dcbSerialParams.fDtrControl = DTR_CONTROL_DISABLE;
+	// Keep DTR asserted for RP2040 USB CDC (Serial readiness), without toggling it.
+	dcbSerialParams.fDtrControl = DTR_CONTROL_ENABLE;
 	dcbSerialParams.fRtsControl = RTS_CONTROL_DISABLE;
 	dcbSerialParams.fOutxCtsFlow = FALSE;
 	dcbSerialParams.fOutxDsrFlow = FALSE;

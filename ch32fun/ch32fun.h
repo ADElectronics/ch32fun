@@ -1106,8 +1106,11 @@ int WaitForDebuggerToAttach( int timeout_ms );
 // Returns 1 if a debugger has activated the debug module.
 #define DebugPrintfBufferFree() (!(*DMDATA0 & 0x80))
 
-// Just a definition to the internal _write function.
+// The host Windows CRT already declares _write() with a different signature.
+// This embedded-device declaration is not needed when compiling minichlink.
+#if !(defined(MINICHLINK) && defined(_WIN32))
 int _write(int fd, const char *buf, int size);
+#endif
 
 // Print a hexadecimal value to the debug (or UART) depending on configuration.
 void PrintHex( uint32_t n );

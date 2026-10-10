@@ -47,17 +47,25 @@ int serial_dev_open(serial_dev_t *dev) {
 	dcbSerialParams.ByteSize = 8;
 	dcbSerialParams.StopBits = ONESTOPBIT;
 	dcbSerialParams.Parity = NOPARITY;
+	// Keep DTR asserted for RP2040 USB CDC (Serial readiness), without toggling it.
+	dcbSerialParams.fDtrControl = DTR_CONTROL_ENABLE;
+	dcbSerialParams.fRtsControl = RTS_CONTROL_DISABLE;
+	dcbSerialParams.fOutxCtsFlow = FALSE;
+	dcbSerialParams.fOutxDsrFlow = FALSE;
+	dcbSerialParams.fDsrSensitivity = FALSE;
+	dcbSerialParams.fOutX = FALSE;
+	dcbSerialParams.fInX = FALSE;
 	// write back
 	if (!SetCommState(dev->handle, &dcbSerialParams)){ 
 		return -1;
 	}
-	// Set the timeout parameters to "no timeout" (blocking).
+	// Limit each blocking read/write call to 2 seconds so an unresponsive device cannot hang forever.
 	// see https://learn.microsoft.com/en-us/windows/win32/api/winbase/ns-winbase-commtimeouts
 	COMMTIMEOUTS timeouts;
 	timeouts.ReadIntervalTimeout = 0;
-	timeouts.ReadTotalTimeoutConstant = MAXDWORD;
+	timeouts.ReadTotalTimeoutConstant = 2000;
 	timeouts.ReadTotalTimeoutMultiplier = 0;
-	timeouts.WriteTotalTimeoutConstant = MAXDWORD;
+	timeouts.WriteTotalTimeoutConstant = 2000;
 	timeouts.WriteTotalTimeoutMultiplier = 0;
 	// Write the parameters
 	if (!SetCommTimeouts(dev->handle, &timeouts)) {
@@ -109,11 +117,22 @@ int serial_dev_write(serial_dev_t *dev, const void* data, size_t len) {
 
 int serial_dev_read(serial_dev_t *dev, void* data, size_t len) {
 #ifdef IS_WINDOWS
-	DWORD dwBytesRead = 0;
-	if (!ReadFile(dev->handle, data, len, &dwBytesRead, NULL)) {
-		return -1;
+	// ReadFile can return fewer bytes than requested on timeout.  Ardulink
+	// expects exact 1- and 4-byte replies; never treat an empty reply as data.
+	size_t received = 0;
+	while (received < len) {
+		DWORD got = 0;
+		DWORD requested = (DWORD)(len - received);
+		if (!ReadFile(dev->handle, (char *)data + received, requested, &got, NULL))
+			return -1;
+		if (got == 0) {
+			fprintf(stderr, "Serial read timed out: %zu/%zu bytes on %s\\n", received, len, dev->port);
+			_set_errno(ETIMEDOUT);
+			return -1;
+		}
+		received += got;
 	}
-	return (int) dwBytesRead;
+	return (int)received;
 #else
 	int got, count = 0;
 
@@ -133,13 +152,8 @@ int serial_dev_read(serial_dev_t *dev, void* data, size_t len) {
 
 int serial_dev_do_dtr_reset(serial_dev_t *dev) {
 #ifdef IS_WINDOWS
-	// EscapeCommFunction returns 0 on fail
-	if(EscapeCommFunction(dev->handle, SETDTR) == 0) {
-		return -1;
-	}
-	if(EscapeCommFunction(dev->handle, CLRDTR) == 0) {
-		return -1;
-	}
+	// Intentionally do not toggle DTR: some targets reset on DTR edges.
+	(void)dev;
 #else
 	int argp = TIOCM_DTR;
 	// Arduino DTR reset.

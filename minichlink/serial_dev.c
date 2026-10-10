@@ -47,6 +47,14 @@ int serial_dev_open(serial_dev_t *dev) {
 	dcbSerialParams.ByteSize = 8;
 	dcbSerialParams.StopBits = ONESTOPBIT;
 	dcbSerialParams.Parity = NOPARITY;
+	// Never assert DTR or use hardware DTR/RTS flow control on Windows.
+	dcbSerialParams.fDtrControl = DTR_CONTROL_DISABLE;
+	dcbSerialParams.fRtsControl = RTS_CONTROL_DISABLE;
+	dcbSerialParams.fOutxCtsFlow = FALSE;
+	dcbSerialParams.fOutxDsrFlow = FALSE;
+	dcbSerialParams.fDsrSensitivity = FALSE;
+	dcbSerialParams.fOutX = FALSE;
+	dcbSerialParams.fInX = FALSE;
 	// write back
 	if (!SetCommState(dev->handle, &dcbSerialParams)){ 
 		return -1;
@@ -133,13 +141,8 @@ int serial_dev_read(serial_dev_t *dev, void* data, size_t len) {
 
 int serial_dev_do_dtr_reset(serial_dev_t *dev) {
 #ifdef IS_WINDOWS
-	// EscapeCommFunction returns 0 on fail
-	if(EscapeCommFunction(dev->handle, SETDTR) == 0) {
-		return -1;
-	}
-	if(EscapeCommFunction(dev->handle, CLRDTR) == 0) {
-		return -1;
-	}
+	// Intentionally do not toggle DTR: some targets reset on DTR edges.
+	(void)dev;
 #else
 	int argp = TIOCM_DTR;
 	// Arduino DTR reset.

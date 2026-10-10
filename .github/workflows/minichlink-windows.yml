@@ -1,0 +1,63 @@
+name: Build minichlink Windows x64 (no DTR)
+
+on:
+  push:
+    branches:
+      - master
+      - fix/windows-com-no-dtr
+    paths:
+      - 'minichlink/**'
+      - '.github/workflows/minichlink-windows.yml'
+  pull_request:
+    paths:
+      - 'minichlink/**'
+      - '.github/workflows/minichlink-windows.yml'
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Windows x64 MinGW
+    runs-on: windows-2022
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install MSYS2 MinGW x64 toolchain and libusb
+        uses: msys2/setup-msys2@v2
+        with:
+          msystem: MINGW64
+          update: true
+          install: >-
+            mingw-w64-x86_64-gcc
+            mingw-w64-x86_64-libusb
+            mingw-w64-x86_64-pkgconf
+
+      - name: Compile minichlink.exe
+        working-directory: minichlink
+        run: |
+          gcc -Os -Wall -D_WIN32_WINNT=0x0600 -DCH32V003 -DMINICHLINK -I. \
+            -DVERSION='"github-actions"' \
+            -o minichlink.exe \
+            minichlink.c pgm-wch-linke.c pgm-wch-isp.c pgm-esp32s2-ch32xx.c \
+            nhc-link042.c ardulink.c serial_dev.c pgm-b003fun.c \
+            minichgdb.c chips.c ch5xx.c \
+            -lsetupapi -lws2_32 -lusb-1.0 -lpthread
+
+      - name: Verify PE executable
+        working-directory: minichlink
+        run: |
+          file minichlink.exe
+          test -s minichlink.exe
+
+      - name: Upload Windows executable
+        uses: actions/upload-artifact@v4
+        with:
+          name: minichlink-windows-x64-no-dtr
+          path: minichlink/minichlink.exe
+          if-no-files-found: error
